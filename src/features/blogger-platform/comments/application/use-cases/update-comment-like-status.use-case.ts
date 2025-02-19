@@ -6,10 +6,7 @@ import {
   LikeDocument,
   LikeModelType,
 } from '../../../likes/domain/like.entity';
-import {
-  CreateLikeDTO,
-  LikesAndDislikesCount,
-} from '../../../likes/domain/dto/like.dto';
+import { LikesAndDislikesCount } from '../../../likes/domain/dto/like.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { CommentsRepository } from '../../infrastructure/comments.repository';
 import { UsersRepository } from '../../../../user-accounts/users/infrastructure/users.repository';
@@ -40,35 +37,35 @@ export class UpdateCommentLikeStatusUseCase
   ) {}
 
   async execute({ dto }: UpdateCommentLikeStatusCommand): Promise<void> {
-    //TODO: Promise.all
-    const comment: CommentDocument =
-      await this.commentsRepository.getCommentByIdOrNotFoundError(
-        dto.commentId,
-      );
+    const commentPromise =
+      this.commentsRepository.getCommentByIdOrNotFoundError(dto.commentId);
 
-    const user: User = await this.usersRepository.getUserByIdOrNotFoundError(
+    const userPromise = this.usersRepository.getUserByIdOrNotFoundError(
       dto.userId,
     );
 
-    let like: LikeDocument | null = await this.likesRepository.findLike(
+    const likePromise = this.likesRepository.findLike(
       dto.commentId,
       dto.userId,
     );
 
+    const [comment, user, like]: [CommentDocument, User, LikeDocument | null] =
+      await Promise.all([commentPromise, userPromise, likePromise]);
+
     if (like) {
       like.updateLike(dto.likeStatus);
+
+      await this.likesRepository.save(like);
     } else {
-      const createLikeDTO: CreateLikeDTO = {
+      const like = this.LikeModel.createLike({
         commentOrPostId: dto.commentId,
         userId: dto.userId,
         login: user.login,
         likeStatus: dto.likeStatus,
-      };
+      });
 
-      like = this.LikeModel.createLike(createLikeDTO);
+      await this.likesRepository.save(like);
     }
-
-    await this.likesRepository.save(like);
 
     const likesAndDislikesCount: LikesAndDislikesCount =
       await this.likesRepository.getLikesAndDislikesCount(dto.commentId);

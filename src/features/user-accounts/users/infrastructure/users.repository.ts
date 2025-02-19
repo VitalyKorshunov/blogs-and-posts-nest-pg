@@ -173,19 +173,13 @@ export class UsersRepository {
             SELECT $10, $11, $12, u.id
             FROM u
                 RETURNING "userId"
-                ), rp AS (
-                INSERT
+                )
+            INSERT
             INTO "recoveryPassword"("expirationPassDate",
                                     "recoveryCode",
                                     "userId")
-                SELECT $8, $9, ec."userId" 
-                    FROM ec
-                        RETURNING "userId"
-                )
-            
-
-            SELECT "userId" as "userId"
-            FROM rp;
+            SELECT $8, $9, ec."userId"
+            FROM ec RETURNING "userId" as "userId"
         `,
         [
           user.login, // $1
@@ -213,24 +207,20 @@ export class UsersRepository {
     try {
       await this.dataSource.query(
         `
-            WITH first AS (UPDATE users
-            SET login            = $1,
-                email            = $2,
-                "passHash"       = $3,
-                "updatedAt"      = $4,
-                "deletedAt"      = $5,
-                "deletionStatus" = $6
-            WHERE id = $12), second AS
-
-            (UPDATE "recoveryPassword"
-            SET "expirationPassDate" = $7,
-                "recoveryCode"   = $8
+            WITH first AS (
+            UPDATE users
+            SET login = $1, email = $2, "passHash" = $3, "updatedAt" = $4, "deletedAt" = $5, "deletionStatus" = $6
+            WHERE id = $12)
+                , second AS
+                (
+            UPDATE "recoveryPassword"
+            SET "expirationPassDate" = $7, "recoveryCode" = $8
             WHERE "userId" = $12)
 
             UPDATE "emailConfirmation"
-            SET "expirationEmailDate"   = $9,
-                "confirmationCode" = $10,
-                "isConfirmed"      = $11
+            SET "expirationEmailDate" = $9,
+                "confirmationCode"    = $10,
+                "isConfirmed"         = $11
             WHERE "userId" = $12;
 
         `,
